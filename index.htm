@@ -1,0 +1,297 @@
+<!DOCTYPE HTML>
+<!-- Author: Harley Jackson  me@harls.com  All rights reserved. -->
+<html>
+<head>
+<meta content="text/html; charset=UTF-8" http-equiv="content-type" />
+<meta name="apple-touch-fullscreen" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black"/>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<script src="jquery.js"></script>
+<script>
+	const AMBER_URL = "https://api.amber.com.au/v1"
+	const TIMER_FULL_DASH_ARRAY = 283;
+	// The price at which the meter shows full.
+	const MAX_COST = 80;
+	
+	$(() => {
+		if (localStorage.apiToken) main();
+		else login();
+	});
+
+	function login() {
+		$("#btnOk").click(async () => {
+			let apiToken = $("#apiToken").val();
+			let opts = {
+				method: "GET",
+				headers: { Authorization: `Bearer ${apiToken}` }
+			}
+			let res = await fetch(`${AMBER_URL}/sites`, opts);
+			res = await res.json();
+			if (res.message) $("#error").text("Invalid API Token");
+			else {
+				localStorage.apiToken = apiToken;
+				main();
+			}
+		});
+	}
+	
+	function main() {
+		$(".gaugeDiv").show();
+		$("#login").hide();
+		calcLayout();
+		screen.orientation.addEventListener("change", e => setTimeout(calcLayout, 50));
+
+		getCostAndRenewable();
+		setInterval(getCostAndRenewable, 60 * 1000);
+		
+		function calcLayout() {
+			let w = $(window).width();
+			let h = $(window).height();
+			if (w > h) w /= 2;
+			else h /= 2;
+			$(".gaugeDiv").width(w * 0.9);
+			$(".gaugeDiv").height(h * 0.9);
+		}
+	}
+
+	async function getCostAndRenewable() {
+		let opts = {
+			method: "GET",
+			headers: { Authorization: `Bearer ${localStorage.apiToken}` }
+		}
+		let res = await fetch(`${AMBER_URL}/sites`, opts);
+		res = await res.json();
+		let siteId = res[0].id;
+		res = await fetch(`${AMBER_URL}/sites/${siteId}/prices/current`, opts);
+		res = await res.json();
+		let costPerKwh = Math.round(res[0].perKwh);
+		let renewable = Math.round(res[0].renewables);
+		setCircleDasharray("#cost", costPerKwh, MAX_COST);
+		setCircleDasharray("#renewable", renewable, 100);
+		// Set cost colour
+		let colour;
+		if (costPerKwh < 15) colour = "ltGreen";
+		else if (costPerKwh < 25) colour = "green";
+		else if (costPerKwh < 35) colour = "yellow";
+		else if (costPerKwh < 50) colour = "orange";
+		else colour = "red";
+		$("#cost .gauge-path-remaining").attr("class", `gauge-path-remaining ${colour}`);
+		if (costPerKwh >= 100) costPerKwh = (costPerKwh / 100).toFixed(2);
+		else costPerKwh += "c";
+		$("#cost .gauge-label").text(costPerKwh);
+		// Set renewable colour
+		if (renewable > 65) colour = "ltGreen";
+		else if (renewable > 45) colour = "green";
+		else if (renewable > 35) colour = "yellow";
+		else colour = "orange";
+		$("#renewable .gauge-path-remaining").attr("class", `gauge-path-remaining ${colour}`);
+		$("#renewable .gauge-label").text(renewable + "%");
+		
+		function setCircleDasharray(which, val, max) {
+			const circleDasharray = `${val / max * TIMER_FULL_DASH_ARRAY} ${TIMER_FULL_DASH_ARRAY}`;
+			$(`${which} .gauge-path-remaining`).attr("stroke-dasharray", circleDasharray);
+		}
+	}
+</script>
+
+<style>
+@font-face {
+    font-family: "Roboto";
+    font-weight: normal;
+    src: url("./Roboto-Medium.ttf");
+}
+
+body {
+	background-color: black;
+	font: normal 60px Roboto;
+	color: white;
+}
+
+#cost, #renewable {
+	position: absolute;
+	width: 100%;
+	height: 100%;
+}
+
+.base-gauge {
+    position: absolute;
+    right: 10px;
+    top: 10px;
+    width: 90%;
+    height: 90%;
+}
+
+.gauge-svg {
+    transform: scaleX(-1);
+}
+
+.gauge-circle {
+    fill: none;
+    stroke: none;
+}
+
+.gauge-path-elapsed {
+    stroke-width: 15px;
+    stroke: #888;
+}
+
+.gauge-path-remaining {
+    stroke-width: 15px;
+    transform: rotate(-90deg);
+    transform-origin: center;
+    fill-rule: nonzero;
+    stroke: currentColor;
+}
+
+.gauge-path-remaining.grey {
+    color: #333;
+}
+
+.gauge-path-remaining.ltGreen {
+    color: #00FF00;
+}
+
+.gauge-path-remaining.green {
+    color: #00AA00;
+}
+
+.gauge-path-remaining.orange {
+    color: orange;
+}
+
+.gauge-path-remaining.yellow {
+    color: yellow;
+}
+
+.gauge-path-remaining.red {
+    color: red;
+}
+
+.gauge-label {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    top: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 8vmax;
+}
+
+.gaugeDiv {
+	position: relative;
+	width: 500px;
+	height: 500px;
+	float: left;
+	margin: 20px;
+	display: none;
+}
+
+.header {
+	text-align: center;
+	font-size: 4vmax;
+}
+
+#login {
+	position: absolute;
+	width: 100%;
+	height: 100%;
+	background-color: black;
+	text: white;
+	font-size: 40px;
+}
+
+#login .enterToken {
+	position: absolute;
+	width: 90%;
+	height: 100px;
+	left: 0;
+	right: 0;
+	top: 20%;
+	margin: auto;
+	font-size: 40px;
+}
+
+#login .disclaimer {
+	position: absolute;
+	width: 90%;
+	height: 100px;
+	left: 0;
+	right: 0;
+	top: 20px;
+	margin: auto;
+	font-size: 20px !important;
+}
+
+input, button {
+	background-color: black;
+	color: white;
+	font-size: 35px;
+	width: 70%;
+	height: 60px;
+}
+
+button {
+	width: 100px;
+}
+
+a {
+	color: #AAA;
+}
+
+</style>
+<title>Amber Electric Cost</title>
+</head>
+<body>
+<div class="gaugeDiv">
+	<div class="header">Current cost/kWh</div>
+	<div id="cost">
+		<div class="base-gauge">
+			<svg class="gauge-svg" viewBox="0 0 120 120">
+				<g class="gauge-circle">
+					<circle class="gauge-path-elapsed" cx="60" cy="60" r="45"></circle>
+					<path stroke-dasharray="283" class="gauge-path-remaining" 
+						d="M 60, 60
+							m -45, 0
+							a 45, 45 0 1, 0 90, 0
+							a 45, 45 0 1, 0 -90, 0">
+				  </path>
+				</g>
+			</svg>
+			<span class="gauge-label"></span>
+		</div>
+	</div>
+</div>
+<div class="gaugeDiv">
+	<div class="header">Grid renewables</div>
+	<div id="renewable">
+		<div class="base-gauge">
+			<svg class="gauge-svg" viewBox="0 0 120 120">
+				<g class="gauge-circle">
+					<circle class="gauge-path-elapsed" cx="60" cy="60" r="45"></circle>
+					<path stroke-dasharray="283" class="gauge-path-remaining" 
+						d="M 60, 60
+							m -45, 0
+							a 45, 45 0 1, 0 90, 0
+							a 45, 45 0 1, 0 -90, 0">
+				  </path>
+				</g>
+			</svg>
+			<span class="gauge-label"></span>
+		</div>
+	</div>
+</div>
+<div id="login">
+	<div class="disclaimer">
+		This site is for demonstration purposes only. It will not remain up forever, but when it gets taken down I will advise here the Github URL.
+	</div>
+	<div class="enterToken">Enter Amber API Token: (it starts with psk_ )
+		<p>
+		<input id="apiToken" type="text" />
+		&nbsp;&nbsp;&nbsp;
+		<button id="btnOk">OK</button>
+		<p>
+		<span id="error">Token can be generated at <a href="https://app.amber.com.au/developers">app.amber.com.au/developers</a></span>
+</div>
+</body>
+</html>
